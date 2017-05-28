@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>复旦校园网自动连接工具</title>
+    <link rel="stylesheet" href="css/bootstrap.min.css">
+</head>
+<body>
+<div class="container" ng-app="fdApp" ng-controller="main">
+    <div class="row">
+        <div class="col-xs-8 col-xs-offset-2" ng-show="mainShow">
+            <div class="panel panel-primary">
+                <div class="panel-heading">
+                    <h3 class="panel-title">
+                        基本信息
+                    </h3>
+                </div>
+                <div class="panel-body">
+                    <h3><strong>学号：</strong>{{stuId}}</h3>
+                    <h3><strong>自动重连时间</strong>：{{updateMinute}}分钟</h3>
+                    <h3><strong>当前网络状态：</strong>{{connectStatus}}</h3>
+                </div>
+            </div>
+            <div class="panel panel-primary">
+                <div class="panel-heading">
+                    <h3 class="panel-title">
+                        还有这种操作
+                    </h3>
+                </div>
+                <div class="panel-body">
+                    <button class="btn btn-default" ng-click="connect()">重新连接</button>
+                    <button class="btn btn-default" ng-click="checkConnect()">检测连接</button>
+                    <button class="btn btn-default" ng-click="editConfig()">修改配置</button>
+                </div>
+            </div>
+        </div>
+        <div class="col-xs-8 col-xs-offset-2" ng-show="!mainShow">
+            <div class="panel panel-primary">
+                <div class="panel-heading">
+                    <h3 class="panel-title">
+                        配置修改
+                    </h3>
+                </div>
+                <div class="panel-body">
+                    <div class="form-horizontal">
+                        <div class="form-group">
+                            <label for="stuId" class="col-xs-3 control-label">学号</label>
+                            <div class="col-xs-9">
+                                <input type="text" class="form-control" id="stuId" placeholder="学号" ng-model="stuId">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="stuPasswd" class="col-xs-3 control-label">密码</label>
+                            <div class="col-xs-9">
+                                <input type="password" class="form-control" id="stuPasswd" placeholder="密码" ng-model="stuPasswd">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="updateMinute" class="col-xs-3 control-label">重连时长（分钟）</label>
+                            <div class="col-xs-9">
+                                <input type="number" class="form-control" id="updateMinute" placeholder="重连时长（分钟）" ng-model="updateMinute">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="col-xs-9 col-xs-offset-3">
+                                <label>
+                                    <input type="checkbox" ng-model="hide">启动时窗口缩小至托盘
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="col-xs-9 col-xs-offset-3">
+                                <button class="btn btn-primary" ng-click="saveConfig()">保存</button>
+                                <button class="btn btn-default" ng-click="cancelEditConfig()">取消</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+<script src="js/angular.min.js"></script>
+<script>
+    const http = require('http');
+    const fs = require('fs');
+    const path = require('path');
+    const request = require('request');
+    const remote = require('electron').remote;
+    let configName = "config.json";
+
+    let app = angular.module('fdApp', []);
+    app.controller('main', function($scope) {
+        let timeHandle = null;
+
+        init();
+
+        function init() {
+            $scope.mainShow = true;
+            loadConfig();
+            if ($scope.hide) {
+                remote.getCurrentWindow().hide();
+            }
+            connectWeb();
+            timeHandle = setInterval(connectWeb, $scope.updateMinute * 60 * 1000);
+            testConnect();
+
+            $scope.editConfig = function () {
+                $scope.mainShow = false;
+                $scope.$apply();
+            };
+
+            $scope.checkConnect = testConnect;
+            $scope.connect = connectWeb;
+
+            $scope.cancelEditConfig = function () {
+                $scope.mainShow = true;
+                $scope.$apply();
+            };
+
+            $scope.saveConfig = function () {
+                let data = JSON.stringify({
+                    stuId:  $scope.stuId,
+                    stuPasswd: $scope.stuPasswd,
+                    updateMinute: $scope.updateMinute,
+                    hide: $scope.hide
+                });
+                const configPath = path.join(__dirname, configName);
+                fs.writeFileSync(configPath, data);
+                $scope.mainShow = true;
+                $scope.$apply();
+
+                connectWeb();
+                clearInterval(timeHandle);
+                timeHandle = setInterval(connectWeb, $scope.updateMinute * 60 * 1000);
+            }
+        }
+
+        function loadConfig() {
+            const configPath = path.join(__dirname, configName);
+            let config = JSON.parse(fs.readFileSync(configPath));
+            $scope.stuId = config.stuId;
+            $scope.stuPasswd  = config.stuPasswd;
+            $scope.updateMinute = config.updateMinute;
+            $scope.hide = config.hide;
+        }
+
+        function connectWeb() {
+            let urlPath = 'http://10.108.255.249/cgi-bin/do_login?username=' + $scope.stuId +
+                    '&password={TEXT}' + $scope.stuPasswd +
+                    '&drop=0&type=1&n=100';
+            console.log(urlPath);
+            http.get(urlPath, function (res) {
+                console.log("statusCode: ", res.statusCode);
+            })
+        }
+
+        function testConnect() {
+            request('https://www.baidu.com', function (error, response, body) {
+                if (error) {
+                    $scope.connectStatus = '未连接';
+                } else {
+                    $scope.connectStatus = '已连接';
+                }
+                $scope.$apply();
+            })
+        }
+
+
+    });
+</script>
+
+</html>
